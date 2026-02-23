@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, Callable, Dict, List, Optional, TypedDict
 
 from langgraph.graph import END, StateGraph
 
@@ -68,6 +68,7 @@ class AgentState(TypedDict):
     # Injected dependencies
     medgemma: Any
     tavily_api_key: str
+    token_callback: Optional[Callable[[str], None]]
 
 
 # ---------------------------------------------------------------------------
@@ -196,6 +197,18 @@ def reasoner_node(state: AgentState) -> AgentState:
     medgemma: MedGemmaClient = state["medgemma"]
     doctor_dict = state.get("doctor", {})
     patient_dict = state.get("patient")
+    token_callback = state.get("token_callback")
+
+    # Stream allergy alerts before LLM generation so they appear first
+    alerts = state.get("allergy_alerts", [])
+    if alerts and token_callback:
+        warning_lines = ["## ALLERGY ALERTS"]
+        for a in alerts:
+            drug = a.get("drug", "")
+            allergy = a.get("allergy", "")
+            warning_lines.append(f"- **{drug}** — Patient allergic to {allergy}!")
+        warning_lines.append("\n---\n")
+        token_callback("\n".join(warning_lines))
 
     # Reconstruct Pydantic models for prompt building
     doctor = DoctorContext(**doctor_dict)
@@ -219,7 +232,12 @@ def reasoner_node(state: AgentState) -> AgentState:
         prompt = conv_context + "\n\n" + prompt
 
     max_tokens = 150 if mode == QueryMode.CRITICAL else 1024
-    state["final_response"] = medgemma.generate(prompt, max_tokens=max_tokens, stream=True)
+    state["final_response"] = medgemma.generate(
+        prompt,
+        max_tokens=max_tokens,
+        stream=False,
+        callback=token_callback,
+    )
 
     return state
 
@@ -231,6 +249,7 @@ def reasoner_node(state: AgentState) -> AgentState:
 def formatter_node(state: AgentState) -> AgentState:
     """Add safety alerts, citations, and metadata to the response."""
     response = state.get("final_response", "")
+    token_callback = state.get("token_callback")
 
     # Prepend allergy warnings
     alerts = state.get("allergy_alerts", [])
@@ -241,7 +260,8 @@ def formatter_node(state: AgentState) -> AgentState:
             allergy = a.get("allergy", "")
             warning_lines.append(f"- **{drug}** — Patient allergic to {allergy}!")
         warning_lines.append("\n---\n")
-        response = "\n".join(warning_lines) + response
+        prefix = "\n".join(warning_lines)
+        response = prefix + response
 
     # Append citations
     citations: List[Dict] = []
@@ -250,15 +270,21 @@ def formatter_node(state: AgentState) -> AgentState:
     for r in state.get("pubmed_results", [])[:3]:
         citations.append({"title": r["title"][:60], "url": r["url"], "source": "pubmed"})
 
+    suffix = ""
     if citations:
-        response += "\n\n---\n## References\n"
+        suffix += "\n\n---\n## References\n"
         for i, c in enumerate(citations, 1):
-            response += f"{i}. [{c['title']}]({c['url']})\n"
+            suffix += f"{i}. [{c['title']}]({c['url']})\n"
 
     # Tools used footer
     tools = state.get("tools_used", [])
     if tools:
-        response += f"\n*Tools used: {', '.join(tools)}*"
+        suffix += f"\n*Tools used: {', '.join(tools)}*"
+
+    if suffix:
+        if token_callback:
+            token_callback(suffix)
+        response += suffix
 
     state["final_response"] = response
     state["citations"] = citations

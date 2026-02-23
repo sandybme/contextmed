@@ -121,6 +121,7 @@ class ContextMedAgent:
             "tools_used": [],
             "medgemma": self.medgemma,
             "tavily_api_key": self.settings.tavily_api_key,
+            "token_callback": None,
         }
 
         result = self.graph.invoke(state)

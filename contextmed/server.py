@@ -173,6 +173,10 @@ def create_app(agent: ContextMedAgent) -> FastAPI:
                     agent.doctor.id, patient_id
                 )
 
+                # Callback streams LLM tokens to the client in real-time
+                def on_token(token: str):
+                    token_queue.put(("token", token))
+
                 # Build state
                 state: AgentState = {
                     "query": req.query,
@@ -193,14 +197,11 @@ def create_app(agent: ContextMedAgent) -> FastAPI:
                     "tools_used": [],
                     "medgemma": agent.medgemma,
                     "tavily_api_key": agent.settings.tavily_api_key,
+                    "token_callback": on_token,
                 }
 
                 token_queue.put(("status", "generating"))
                 result = agent.graph.invoke(state)
-
-                # Stream the response character by character
-                for char in result["final_response"]:
-                    token_queue.put(("token", char))
 
                 # Store in memory
                 agent.memory.add(agent.doctor.id, "user", req.query, patient_id)
