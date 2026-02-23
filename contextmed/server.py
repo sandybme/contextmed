@@ -166,16 +166,19 @@ def create_app(agent: ContextMedAgent) -> FastAPI:
                 token_queue.put(("status", "searching"))
 
                 # Run the LangGraph pipeline in a thread
-                from contextmed.agents.graph import AgentState
+                from contextmed.agents.graph import AgentState, _token_callback_var
 
                 patient_id = agent.patient.patient_id if agent.patient else ""
                 conv_context = agent.memory.format_for_prompt(
                     agent.doctor.id, patient_id
                 )
 
-                # Callback streams LLM tokens to the client in real-time
+                # Set the token callback via contextvar so graph nodes can
+                # stream tokens in real-time (LangGraph drops callables from state)
                 def on_token(token: str):
                     token_queue.put(("token", token))
+
+                _token_callback_var.set(on_token)
 
                 # Build state
                 state: AgentState = {
@@ -197,7 +200,6 @@ def create_app(agent: ContextMedAgent) -> FastAPI:
                     "tools_used": [],
                     "medgemma": agent.medgemma,
                     "tavily_api_key": agent.settings.tavily_api_key,
-                    "token_callback": on_token,
                 }
 
                 token_queue.put(("status", "generating"))

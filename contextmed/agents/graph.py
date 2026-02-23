@@ -11,9 +11,16 @@ Pipeline: Planner -> Retriever -> Reasoner -> Formatter
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import re
 from typing import Any, Callable, Dict, List, Optional, TypedDict
+
+# ContextVar allows the server to pass a token callback into graph nodes
+# without putting it in LangGraph state (which drops callables).
+_token_callback_var: contextvars.ContextVar[Optional[Callable[[str], None]]] = (
+    contextvars.ContextVar("_token_callback_var", default=None)
+)
 
 from langgraph.graph import END, StateGraph
 
@@ -68,7 +75,6 @@ class AgentState(TypedDict):
     # Injected dependencies
     medgemma: Any
     tavily_api_key: str
-    token_callback: Optional[Callable[[str], None]]
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +203,7 @@ def reasoner_node(state: AgentState) -> AgentState:
     medgemma: MedGemmaClient = state["medgemma"]
     doctor_dict = state.get("doctor", {})
     patient_dict = state.get("patient")
-    token_callback = state.get("token_callback")
+    token_callback = _token_callback_var.get()
 
     # Stream allergy alerts before LLM generation so they appear first
     alerts = state.get("allergy_alerts", [])
@@ -249,7 +255,7 @@ def reasoner_node(state: AgentState) -> AgentState:
 def formatter_node(state: AgentState) -> AgentState:
     """Add safety alerts, citations, and metadata to the response."""
     response = state.get("final_response", "")
-    token_callback = state.get("token_callback")
+    token_callback = _token_callback_var.get()
 
     # Prepend allergy warnings
     alerts = state.get("allergy_alerts", [])
