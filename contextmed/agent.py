@@ -101,24 +101,23 @@ class ContextMedAgent:
             self._current_doctor.id, patient_id
         )
 
-        # Build initial state
+        # Build initial state for ReAct agent
         state: AgentState = {
             "query": query,
             "doctor": self._current_doctor.model_dump(),
             "patient": self._current_patient.model_dump() if self._current_patient else None,
             "mode": mode,
             "conversation_context": conv_context,
-            "needs_drugs": False,
-            "needs_literature": False,
-            "needs_guidelines": False,
-            "search_terms": [],
-            "pubmed_results": [],
-            "openfda_results": [],
-            "guideline_results": [],
-            "allergy_alerts": [],
+            # ReAct state
+            "scratchpad": "",
+            "current_tool": None,
+            "current_params": None,
+            "tool_results": [],
+            "iteration": 0,
+            # Output
             "final_response": "",
-            "citations": [],
             "tools_used": [],
+            # Injected
             "medgemma": self.medgemma,
             "tavily_api_key": self.settings.tavily_api_key,
         }

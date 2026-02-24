@@ -42,21 +42,41 @@ GUIDELINE_DOMAINS: Dict[str, List[str]] = {
     ],
 }
 
+# Query context to append for each geography to improve search relevance
+GUIDELINE_QUERY_CONTEXT: Dict[str, str] = {
+    "USA": "FDA AHA ACC guidelines United States",
+    "Germany": "AWMF Leitlinie deutsche guidelines Germany EMA",
+    "EU": "ESC EMA European guidelines",
+    "India": "ICMR CDSCO Indian guidelines India",
+    "UK": "NICE BNF NHS guidelines United Kingdom",
+}
+
+# Additional domains for critical care searches
+CRITICAL_CARE_DOMAINS: List[str] = [
+    "sccm.org",           # Society of Critical Care Medicine
+    "esicm.org",          # European Society of Intensive Care Medicine
+    "intensivecarenetwork.com",
+    "ccforum.biomedcentral.com",  # Critical Care Forum
+    "pmc.ncbi.nlm.nih.gov",       # PubMed Central for research
+]
+
 
 async def search_guidelines(
     query: str,
     country: str = "USA",
     api_key: str = "",
     max_results: int = 5,
+    critical_mode: bool = False,
 ) -> List[Dict]:
     """
     Search for clinical practice guidelines relevant to a geography.
 
     Args:
-        query:       Clinical search query.
-        country:     Physician's country — determines which guideline sources to use.
-        api_key:     Tavily API key.
-        max_results: Number of results to return.
+        query:         Clinical search query.
+        country:       Physician's country — determines which guideline sources to use.
+        api_key:       Tavily API key.
+        max_results:   Number of results to return.
+        critical_mode: If True, include critical care/emergency domains and context.
 
     Returns:
         List of dicts with title, url, content snippet.
@@ -65,11 +85,20 @@ async def search_guidelines(
         return []
 
     client = AsyncTavilyClient(api_key=api_key)
-    domains = GUIDELINE_DOMAINS.get(country, GUIDELINE_DOMAINS["USA"])
+    domains = GUIDELINE_DOMAINS.get(country, GUIDELINE_DOMAINS["USA"]).copy()
+    query_context = GUIDELINE_QUERY_CONTEXT.get(country, GUIDELINE_QUERY_CONTEXT["USA"])
+
+    # Add critical care domains and context for critical mode
+    if critical_mode:
+        domains.extend(CRITICAL_CARE_DOMAINS)
+        query_context += " critical care emergency ICU intensive care SCCM"
+
+    # Build geography-aware query to improve relevance
+    enhanced_query = f"{query} {query_context} clinical practice guidelines"
 
     try:
         response = await client.search(
-            query=f"clinical guidelines {query}",
+            query=enhanced_query,
             search_depth="advanced",
             include_domains=domains,
             max_results=max_results,

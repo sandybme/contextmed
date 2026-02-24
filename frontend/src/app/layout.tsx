@@ -1,26 +1,28 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "ContextMed — Globally Informed, Locally Accurate",
-  description:
-    "AI-powered clinical decision support. Right guideline, right geography, right drug, right source.",
+  title: "ContextMed - Clinical Decision Support",
+  description: "Globally Informed. Locally Accurate. AI-powered clinical decision support for healthcare professionals.",
+  keywords: ["clinical decision support", "healthcare AI", "MedGemma", "medical assistant"],
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="en">
-      <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body className="antialiased">{children}</body>
+      <body className={`${inter.className} antialiased`}>
+        {children}
+      </body>
     </html>
   );
 }

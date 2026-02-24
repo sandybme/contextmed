@@ -1,307 +1,277 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from 'react';
+import { useContextMed } from '@/hooks/useContextMed';
+import { AppointmentList, PatientDetail } from '@/components/patient';
+import { ChatPanel } from '@/components/chat';
+import { Avatar, Badge, Skeleton } from '@/components/ui';
 import {
-  Doctor,
-  Patient,
-  StreamEvent,
-  fetchDoctors,
-  fetchPatients,
-  streamQuery,
-} from "@/lib/api";
-import DoctorSelector from "@/components/DoctorSelector";
-import PatientSelector from "@/components/PatientSelector";
-import ChatMessage from "@/components/ChatMessage";
-import QueryInput from "@/components/QueryInput";
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-  metadata?: {
-    doctor?: string;
-    tools_used?: string[];
-    mode?: string;
-  };
-}
+  Activity,
+  ChevronDown,
+  Users,
+  X,
+  Wifi,
+  WifiOff,
+  FileText,
+  Stethoscope,
+} from 'lucide-react';
+import { cn, getCountryFlag, getExperienceLevelLabel } from '@/lib/utils';
+import type { DoctorSummary } from '@/types';
 
 export default function Home() {
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [selectedDoctor, setSelectedDoctor] = useState<string | null>(null);
-  const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [status, setStatus] = useState<string>("");
-  const [connected, setConnected] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const {
+    serverStatus,
+    doctors,
+    patients,
+    isLoadingData,
+    selectedDoctor,
+    selectDoctor,
+    selectedPatientId,
+    selectedPatientEHR,
+    selectPatient,
+    deselectPatient,
+    isLoadingPatient,
+    messages,
+    streamingState,
+    sendMessage,
+    appointmentStatuses,
+    isReady,
+  } = useContextMed();
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [docs, pats] = await Promise.all([
-          fetchDoctors(),
-          fetchPatients(),
-        ]);
-        setDoctors(docs);
-        setPatients(pats);
-        setConnected(true);
-      } catch {
-        setConnected(false);
-      }
-    }
-    load();
-  }, []);
+  const [isPhysicianDropdownOpen, setIsPhysicianDropdownOpen] = useState(false);
+  const [isEHRPanelOpen, setIsEHRPanelOpen] = useState(false);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const handleSubmit = async (query: string, mode: string) => {
-    if (!selectedDoctor || isStreaming) return;
-
-    const userMsg: Message = { role: "user", content: query };
-    setMessages((prev) => [...prev, userMsg]);
-    setIsStreaming(true);
-    setStatus("Connecting...");
-
-    const assistantMsg: Message = {
-      role: "assistant",
-      content: "",
-      metadata: { mode },
-    };
-    setMessages((prev) => [...prev, assistantMsg]);
-
-    try {
-      for await (const event of streamQuery(
-        query,
-        selectedDoctor,
-        selectedPatient,
-        mode,
-      )) {
-        if (event.status) {
-          const labels: Record<string, string> = {
-            processing: "Analysing query...",
-            searching: "Searching evidence...",
-            generating: "Generating response...",
-          };
-          setStatus(labels[event.status] || event.status);
-        }
-
-        if (event.chunk) {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            if (last.role === "assistant") {
-              last.content += event.chunk;
-            }
-            return updated;
-          });
-          setStatus("");
-        }
-
-        if (event.done) {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            if (last.role === "assistant") {
-              last.metadata = {
-                doctor: event.doctor,
-                tools_used: event.tools_used,
-                mode: event.mode,
-              };
-            }
-            return updated;
-          });
-        }
-
-        if (event.error) {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            if (last.role === "assistant") {
-              last.content = `Error: ${event.error}`;
-            }
-            return updated;
-          });
-        }
-      }
-    } catch (err) {
-      setMessages((prev) => {
-        const updated = [...prev];
-        const last = updated[updated.length - 1];
-        if (last.role === "assistant") {
-          last.content = `Connection error. Is the backend running?`;
-        }
-        return updated;
-      });
-    }
-
-    setIsStreaming(false);
-    setStatus("");
+  // Open EHR panel when patient is selected
+  const handleSelectPatient = (patient: { id: string; name: string; chief_complaint: string; age: number; sex: string; country: string }) => {
+    selectPatient(patient);
+    setIsEHRPanelOpen(true);
   };
 
-  const selectedDoctorObj = doctors.find((d) => d.id === selectedDoctor);
-  const selectedPatientObj = patients.find((p) => p.id === selectedPatient);
-
   return (
-    <div className="h-screen flex">
-      {/* Sidebar */}
-      <aside className="w-80 bg-[var(--bg-secondary)] border-r border-[var(--border)] flex flex-col">
-        {/* Logo */}
-        <div className="p-5 border-b border-[var(--border)]">
-          <h1 className="text-lg font-bold tracking-tight">
-            Context<span className="text-[var(--accent)]">Med</span>
-          </h1>
-          <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
-            Globally informed. Locally accurate.
-          </p>
-          <div className="flex items-center gap-1.5 mt-2">
-            <div
-              className={`w-1.5 h-1.5 rounded-full ${
-                connected ? "bg-[var(--success)]" : "bg-[var(--danger)]"
-              }`}
-            />
-            <span className="text-[10px] text-[var(--text-secondary)]">
-              {connected ? "Backend connected" : "Backend offline"}
-            </span>
+    <div className="h-screen flex flex-col bg-slate-50">
+      {/* Header */}
+      <header className="h-14 bg-white border-b border-slate-200 px-4 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 shadow-md">
+            <Activity className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-slate-900">ContextMed</h1>
+            <p className="text-[10px] text-slate-500 -mt-0.5">Globally Informed. Locally Accurate.</p>
           </div>
         </div>
 
-        {/* Selectors */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
-          <DoctorSelector
-            doctors={doctors}
-            selected={selectedDoctor}
-            onSelect={setSelectedDoctor}
-          />
-          <PatientSelector
-            patients={patients}
-            selected={selectedPatient}
-            onSelect={setSelectedPatient}
-          />
-        </div>
-
-        {/* Context summary */}
-        {selectedDoctorObj && (
-          <div className="p-4 border-t border-[var(--border)] bg-[var(--bg-tertiary)]">
-            <div className="text-[10px] uppercase tracking-wider text-[var(--text-secondary)] mb-1.5">
-              Active Context
+        <div className="flex items-center gap-2">
+          {serverStatus === 'connected' ? (
+            <div className="flex items-center gap-1.5 text-green-600 bg-green-50 px-2.5 py-1 rounded-full">
+              <Wifi className="h-3.5 w-3.5" />
+              <span className="text-xs font-medium">Connected</span>
             </div>
-            <div className="text-xs space-y-0.5">
-              <div>
-                <span className="text-[var(--text-secondary)]">Physician:</span>{" "}
-                {selectedDoctorObj.name}
-              </div>
-              <div>
-                <span className="text-[var(--text-secondary)]">Guidelines:</span>{" "}
-                {selectedDoctorObj.country === "USA"
-                  ? "FDA / ACC / AHA"
-                  : selectedDoctorObj.country === "Germany"
-                    ? "EMA / ESC / AWMF"
-                    : selectedDoctorObj.country}
-              </div>
-              {selectedPatientObj && (
-                <div>
-                  <span className="text-[var(--text-secondary)]">Patient:</span>{" "}
-                  {selectedPatientObj.name} ({selectedPatientObj.age}yo)
+          ) : serverStatus === 'checking' ? (
+            <div className="flex items-center gap-1.5 text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
+              <div className="h-3.5 w-3.5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+              <span className="text-xs font-medium">Connecting...</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
+              <WifiOff className="h-3.5 w-3.5" />
+              <span className="text-xs font-medium">Disconnected</span>
+            </div>
+          )}
+        </div>
+      </header>
+
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Sidebar - Physician & Appointments */}
+        <aside className="w-72 bg-white border-r border-slate-200 flex flex-col flex-shrink-0">
+          {/* Physician Dropdown */}
+          <div className="p-3 border-b border-slate-100">
+            <div className="relative">
+              <button
+                onClick={() => setIsPhysicianDropdownOpen(!isPhysicianDropdownOpen)}
+                className="w-full flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Stethoscope className="h-4 w-4 text-slate-500" />
+                  {selectedDoctor ? (
+                    <div className="text-left">
+                      <p className="text-sm font-medium text-slate-900">{selectedDoctor.name}</p>
+                      <p className="text-xs text-slate-500">{selectedDoctor.specialty}</p>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-slate-500">Select Physician</span>
+                  )}
+                </div>
+                <ChevronDown className={cn(
+                  "h-4 w-4 text-slate-400 transition-transform",
+                  isPhysicianDropdownOpen && "rotate-180"
+                )} />
+              </button>
+
+              {/* Dropdown Menu */}
+              {isPhysicianDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
+                  {isLoadingData ? (
+                    <div className="p-3 space-y-2">
+                      {[1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-12 w-full" />
+                      ))}
+                    </div>
+                  ) : (
+                    <PhysicianList
+                      doctors={doctors}
+                      selectedDoctor={selectedDoctor}
+                      onSelect={(doctor) => {
+                        selectDoctor(doctor);
+                        setIsPhysicianDropdownOpen(false);
+                      }}
+                    />
+                  )}
                 </div>
               )}
             </div>
           </div>
-        )}
-      </aside>
 
-      {/* Main chat area */}
-      <main className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="h-14 border-b border-[var(--border)] flex items-center px-6">
-          <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold">Clinical Copilot</h2>
-            {status && (
+          {/* Appointments List */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="px-3 py-2.5 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <svg
-                  className="animate-spin h-3.5 w-3.5 text-[var(--accent)]"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                  />
-                </svg>
-                <span className="text-xs text-[var(--text-secondary)]">
-                  {status}
-                </span>
+                <Users className="h-4 w-4 text-blue-600" />
+                <span className="text-sm font-semibold text-slate-800">Appointments</span>
               </div>
-            )}
-          </div>
-        </header>
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          {messages.length === 0 && (
-            <div className="h-full flex flex-col items-center justify-center text-center">
-              <div className="text-4xl mb-4 opacity-20">+</div>
-              <h3 className="text-lg font-semibold mb-1">
-                Context<span className="text-[var(--accent)]">Med</span>
-              </h3>
-              <p className="text-sm text-[var(--text-secondary)] max-w-md">
-                Select a physician and patient from the sidebar, then ask a
-                clinical question. Responses are tailored to geography,
-                specialty, and experience level.
-              </p>
-              <div className="flex gap-2 mt-6 flex-wrap justify-center">
-                {[
-                  "What is the management plan?",
-                  "Check drug interactions",
-                  "Differential diagnosis",
-                ].map((q) => (
-                  <button
-                    key={q}
-                    onClick={() => {
-                      if (selectedDoctor) handleSubmit(q, "regular");
-                    }}
-                    className="text-xs px-3 py-1.5 rounded-full border border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
+              <Badge size="sm" variant="info">{patients.length}</Badge>
             </div>
-          )}
+            <div className="flex-1 overflow-y-auto">
+              <AppointmentList
+                patients={patients}
+                selectedPatientId={selectedPatientId}
+                onSelectPatient={handleSelectPatient}
+                isLoading={isLoadingData}
+                appointmentStatuses={appointmentStatuses}
+              />
+            </div>
+          </div>
+        </aside>
 
-          {messages.map((msg, i) => (
-            <ChatMessage
-              key={i}
-              role={msg.role}
-              content={msg.content}
-              isStreaming={
-                isStreaming &&
-                i === messages.length - 1 &&
-                msg.role === "assistant"
-              }
-              metadata={msg.metadata}
-            />
-          ))}
-          <div ref={messagesEndRef} />
+        {/* Main Chat Area */}
+        <main className="flex-1 flex flex-col overflow-hidden p-4">
+          <ChatPanel
+            messages={messages}
+            streamingState={streamingState}
+            onSendMessage={sendMessage}
+            doctorName={selectedDoctor?.name}
+            patientName={selectedPatientEHR?.name}
+            isReady={isReady}
+            onDeselectPatient={() => {
+              deselectPatient();
+              setIsEHRPanelOpen(false);
+            }}
+          />
+        </main>
+
+        {/* Right Panel - Patient EHR (Slide-in) */}
+        <div
+          className={cn(
+            "fixed inset-y-0 right-0 w-[420px] bg-white border-l border-slate-200 shadow-2xl transform transition-transform duration-300 ease-in-out z-40",
+            isEHRPanelOpen && selectedPatientEHR ? "translate-x-0" : "translate-x-full"
+          )}
+        >
+          {/* EHR Panel Header */}
+          <div className="h-14 px-4 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50">
+            <div className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-600" />
+              <span className="font-semibold text-slate-900">Patient Record</span>
+            </div>
+            <button
+              onClick={() => setIsEHRPanelOpen(false)}
+              className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+            >
+              <X className="h-4 w-4 text-slate-500" />
+            </button>
+          </div>
+
+          {/* EHR Content */}
+          <div className="h-[calc(100vh-3.5rem)] overflow-y-auto">
+            {isLoadingPatient ? (
+              <div className="p-4 space-y-4">
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-32 w-full" />
+              </div>
+            ) : selectedPatientEHR ? (
+              <PatientDetail patient={selectedPatientEHR} />
+            ) : null}
+          </div>
         </div>
 
-        {/* Input */}
-        <QueryInput
-          onSubmit={handleSubmit}
-          disabled={isStreaming}
-          doctorSelected={!!selectedDoctor}
-        />
-      </main>
+        {/* Overlay when EHR panel is open */}
+        {isEHRPanelOpen && selectedPatientEHR && (
+          <div
+            className="fixed inset-0 bg-black/20 z-30 lg:hidden"
+            onClick={() => setIsEHRPanelOpen(false)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Physician List Component
+function PhysicianList({
+  doctors,
+  selectedDoctor,
+  onSelect,
+}: {
+  doctors: DoctorSummary[];
+  selectedDoctor: DoctorSummary | null;
+  onSelect: (doctor: DoctorSummary) => void;
+}) {
+  // Group by country
+  const doctorsByCountry = doctors.reduce((acc, doctor) => {
+    if (!acc[doctor.country]) {
+      acc[doctor.country] = [];
+    }
+    acc[doctor.country].push(doctor);
+    return acc;
+  }, {} as Record<string, DoctorSummary[]>);
+
+  return (
+    <div className="py-1">
+      {Object.entries(doctorsByCountry).map(([country, countryDoctors]) => (
+        <div key={country}>
+          <div className="px-3 py-1.5 flex items-center gap-1.5">
+            <span className="text-sm">{getCountryFlag(country)}</span>
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+              {country}
+            </span>
+          </div>
+          {countryDoctors.map((doctor) => (
+            <button
+              key={doctor.id}
+              onClick={() => onSelect(doctor)}
+              className={cn(
+                "w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 transition-colors",
+                selectedDoctor?.id === doctor.id && "bg-blue-50"
+              )}
+            >
+              <Avatar name={doctor.name} size="sm" />
+              <div className="flex-1 text-left">
+                <p className="text-sm font-medium text-slate-900">{doctor.name}</p>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-slate-500">{doctor.specialty}</span>
+                  <span className="text-slate-300">·</span>
+                  <span className="text-[10px] text-slate-400">
+                    {getExperienceLevelLabel(doctor.experience_level)}
+                  </span>
+                </div>
+              </div>
+              {selectedDoctor?.id === doctor.id && (
+                <div className="h-2 w-2 rounded-full bg-blue-500" />
+              )}
+            </button>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

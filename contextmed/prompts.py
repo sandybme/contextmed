@@ -47,19 +47,15 @@ STYLE_MAP = {
 }
 
 
-CRITICAL_MODE_PREFIX = """CRITICAL CARE MODE
+CRITICAL_MODE_PREFIX = """CRITICAL CARE MODE - EMERGENCY RESPONSE
 
-STRICT FORMAT - EXACTLY 4 LINES:
-Line 1: Assessment (diagnosis/condition with key finding)
-Line 2: Immediate action (drug + exact dose OR intervention)
-Line 3: Monitor (specific parameter + target value)
-Line 4: Context-aware question (ask what you need to know for next step)
+FORMAT: Provide a rapid, actionable response in this exact structure:
+1. **Assessment**: Primary diagnosis/condition with key supporting finding
+2. **Immediate Action**: Specific intervention with exact drug/dose OR procedure
+3. **Monitor**: Parameter to watch + target value + frequency
+4. **Safety Alert**: Critical consideration based on patient's specific context
 
-RULES:
-- Pack ALL critical info into 4 lines - be dense but clear
-- ALWAYS end with a relevant follow-up question based on patient context
-- Use patient data (allergies, meds, labs) to personalise your question
-
+Keep response dense but clear. Use patient's allergies, medications, and labs to personalize.
 """
 
 
@@ -186,15 +182,20 @@ def _build_patient_context(patient: PatientEHR) -> str:
     )
 
     return (
-        f"\nYOUR PATIENT:\n"
-        f"- Demographics: {patient.age}yo {patient.sex}, BMI {patient.bmi}\n"
-        f"- Chief Complaint: {patient.chief_complaint}\n"
-        f"- Medical History: {conditions}\n"
-        f"- Current Medications: {meds}\n"
-        f"- ALLERGIES: {', '.join(patient.allergies) or 'NKDA'}\n"
-        f"- Vitals: {vitals_str or 'Not available'}\n"
-        f"- Abnormal Labs: {', '.join(labs_abnormal[:5]) or 'None flagged'}\n"
-        f"- HPI: {patient.hpi}"
+        f"\n═══════════════════════════════════════════════════════════════\n"
+        f"PATIENT ELECTRONIC HEALTH RECORD (EHR)\n"
+        f"═══════════════════════════════════════════════════════════════\n"
+        f"Patient: {patient.name} | ID: {patient.patient_id}\n"
+        f"Demographics: {patient.age}yo {patient.sex}, BMI {patient.bmi:.1f}, {patient.weight_kg}kg\n"
+        f"Insurance: {patient.insurance}\n\n"
+        f"CHIEF COMPLAINT:\n{patient.chief_complaint}\n\n"
+        f"HISTORY OF PRESENT ILLNESS (HPI):\n{patient.hpi}\n\n"
+        f"MEDICAL HISTORY:\n{conditions or 'None documented'}\n\n"
+        f"CURRENT MEDICATIONS:\n{meds or 'None'}\n\n"
+        f"⚠️  ALLERGIES: {', '.join(patient.allergies) if patient.allergies else 'NKDA (No Known Drug Allergies)'}\n\n"
+        f"VITAL SIGNS:\n{vitals_str or 'Not available'}\n\n"
+        f"ABNORMAL LABORATORY VALUES:\n{chr(10).join(labs_abnormal[:5]) if labs_abnormal else 'All within normal limits'}\n"
+        f"═══════════════════════════════════════════════════════════════"
     )
 
 
@@ -212,47 +213,73 @@ def build_reasoner_prompt(
 
     parts: List[str] = [build_system_prompt(doctor, patient, mode)]
 
-    # Safety alerts
+    # Safety alerts - these are critical
     if allergy_alerts:
-        parts.append("\nCRITICAL ALLERGY ALERTS:")
+        parts.append("\n🚨 CRITICAL ALLERGY ALERTS:")
         for a in allergy_alerts:
             drug = a.get("drug", a) if isinstance(a, dict) else a.drug
             allergy = a.get("allergy", "") if isinstance(a, dict) else a.allergy
-            parts.append(f"  - {drug} conflicts with allergy to {allergy}")
+            parts.append(f"  ⚠️  {drug} — CONTRAINDICATED due to {allergy} allergy")
+
+    # Evidence section
+    has_evidence = guideline_results or pubmed_results or openfda_results
+    if has_evidence:
+        parts.append("\n───────────────────────────────────────────────────────────────")
+        parts.append("RETRIEVED EVIDENCE (use to support your recommendations)")
+        parts.append("───────────────────────────────────────────────────────────────")
 
     # Guidelines
     if guideline_results:
-        parts.append("\nRELEVANT GUIDELINES:")
+        parts.append("\n📋 CLINICAL GUIDELINES:")
         for r in guideline_results[:3]:
-            parts.append(f"  - {r['title'][:80]}")
+            parts.append(f"  • {r['title'][:80]}")
             if r.get("content"):
-                parts.append(f"    {r['content'][:200]}")
+                parts.append(f"    Summary: {r['content'][:200]}...")
 
     # Literature
     if pubmed_results:
-        parts.append("\nRECENT LITERATURE:")
+        parts.append("\n📚 RECENT LITERATURE:")
         for r in pubmed_results[:3]:
             parts.append(
-                f"  - {r['title'][:80]} ({r.get('source', '')}, {r.get('pubdate', '')})"
+                f"  • {r['title'][:80]} ({r.get('source', 'PubMed')}, {r.get('pubdate', '')})"
             )
 
     # Drug safety
     if openfda_results:
-        parts.append("\nDRUG SAFETY INFO:")
+        parts.append("\n💊 DRUG SAFETY INFORMATION:")
         for r in openfda_results[:3]:
-            parts.append(f"  - {r['drug'].title()}: See warnings/interactions")
+            parts.append(f"  • {r['drug'].title()}: Review warnings and interactions")
 
-    # Query
-    experience = doctor.experience_level.value
-    parts.append(
-        f"\n---\nDOCTOR'S QUESTION: {query}\n---\n\n"
-        f"Provide a structured clinical response:\n"
-        f"1. ASSESSMENT — Key clinical findings\n"
-        f"2. DIFFERENTIAL / DIAGNOSIS\n"
-        f"3. RECOMMENDATIONS — Specific next steps\n"
-        f"4. SAFETY CONSIDERATIONS\n"
-        f"5. FOLLOW-UP\n\n"
-        f"Response:"
-    )
+    # The actual question section - clearly separated
+    parts.append("\n\n" + "═" * 67)
+    parts.append("DOCTOR'S QUESTION")
+    parts.append("═" * 67)
+    parts.append(f"\n{query}\n")
+    parts.append("═" * 67)
+
+    # Instructions based on mode
+    if mode == QueryMode.CRITICAL:
+        parts.append(
+            "\nProvide an EMERGENCY response following the critical care format above.\n"
+            "Be specific with doses and interventions. Consider patient's allergies and current medications."
+        )
+    else:
+        parts.append(
+            "\n📝 INSTRUCTIONS:\n"
+            "Answer the doctor's specific question above. Do NOT provide a general overview of the patient.\n"
+            "Focus ONLY on what was asked. Use the patient's EHR data and retrieved evidence to inform your response.\n\n"
+            "Structure your response based on what's being asked:\n"
+            "- For diagnosis questions: Present differentials with reasoning\n"
+            "- For treatment questions: Provide specific recommendations with evidence\n"
+            "- For management plans: Outline concrete next steps\n"
+            "- For medication questions: Include doses, contraindications, monitoring\n\n"
+            "Always consider:\n"
+            "• Patient's specific allergies and contraindications\n"
+            "• Current medications and potential interactions\n"
+            "• Relevant lab values and vital signs\n"
+            "• Evidence from guidelines and literature when available"
+        )
+
+    parts.append("\n\nResponse:")
 
     return "\n".join(parts)

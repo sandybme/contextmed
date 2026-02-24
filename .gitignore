@@ -210,3 +210,4 @@ __marimo__/
 frontend/node_modules/
 frontend/.next/
 frontend/next-env.d.ts
+*.env

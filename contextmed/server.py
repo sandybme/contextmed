@@ -7,6 +7,7 @@ Exposes the agent as a REST API with SSE streaming for real-time responses.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import queue
 import threading
@@ -161,43 +162,43 @@ def create_app(agent: ContextMedAgent) -> FastAPI:
 
         token_queue: queue.Queue = queue.Queue()
 
+        # Import and set up token callback BEFORE creating thread
+        from contextmed.agents.graph import AgentState, _token_callback_var
+
+        def on_token(token: str):
+            token_queue.put(("token", token))
+
+        # Set callback in main thread context
+        _token_callback_var.set(on_token)
+        # Copy context to pass to child thread
+        ctx = contextvars.copy_context()
+
         def run_agent():
             try:
                 token_queue.put(("status", "searching"))
-
-                # Run the LangGraph pipeline in a thread
-                from contextmed.agents.graph import AgentState, _token_callback_var
 
                 patient_id = agent.patient.patient_id if agent.patient else ""
                 conv_context = agent.memory.format_for_prompt(
                     agent.doctor.id, patient_id
                 )
 
-                # Set the token callback via contextvar so graph nodes can
-                # stream tokens in real-time (LangGraph drops callables from state)
-                def on_token(token: str):
-                    token_queue.put(("token", token))
-
-                _token_callback_var.set(on_token)
-
-                # Build state
+                # Build state for ReAct agent
                 state: AgentState = {
                     "query": req.query,
                     "doctor": agent.doctor.model_dump(),
                     "patient": agent.patient.model_dump() if agent.patient else None,
                     "mode": req.mode.value,
                     "conversation_context": conv_context,
-                    "needs_drugs": False,
-                    "needs_literature": False,
-                    "needs_guidelines": False,
-                    "search_terms": [],
-                    "pubmed_results": [],
-                    "openfda_results": [],
-                    "guideline_results": [],
-                    "allergy_alerts": [],
+                    # ReAct state
+                    "scratchpad": "",
+                    "current_tool": None,
+                    "current_params": None,
+                    "tool_results": [],
+                    "iteration": 0,
+                    # Output
                     "final_response": "",
-                    "citations": [],
                     "tools_used": [],
+                    # Injected
                     "medgemma": agent.medgemma,
                     "tavily_api_key": agent.settings.tavily_api_key,
                 }
@@ -227,13 +228,15 @@ def create_app(agent: ContextMedAgent) -> FastAPI:
             except Exception as e:
                 token_queue.put(("error", str(e)))
 
-        thread = threading.Thread(target=run_agent, daemon=True)
+        # Run the agent function with the copied context (so ContextVars propagate)
+        thread = threading.Thread(target=ctx.run, args=(run_agent,), daemon=True)
         thread.start()
 
         async def generate():
             while True:
+                # Use non-blocking get with short sleep to allow event loop to flush
                 try:
-                    msg_type, content = token_queue.get(timeout=0.1)
+                    msg_type, content = token_queue.get_nowait()
                     if msg_type == "status":
                         yield f"data: {json.dumps({'status': content, 'done': False})}\n\n"
                     elif msg_type == "token":
@@ -245,8 +248,25 @@ def create_app(agent: ContextMedAgent) -> FastAPI:
                         yield f"data: {json.dumps({'error': content, 'done': True})}\n\n"
                         break
                 except queue.Empty:
-                    yield ": keepalive\n\n"
-                    await asyncio.sleep(0.05)
+                    # Short sleep to prevent busy loop and allow event loop to process
+                    await asyncio.sleep(0.01)
+                    # Only send keepalive occasionally to reduce noise
+                    if not thread.is_alive():
+                        # Thread finished, drain remaining queue items
+                        while not token_queue.empty():
+                            try:
+                                msg_type, content = token_queue.get_nowait()
+                                if msg_type == "token":
+                                    yield f"data: {json.dumps({'chunk': content, 'done': False})}\n\n"
+                                elif msg_type == "done":
+                                    yield f"data: {json.dumps({'done': True, **content})}\n\n"
+                                    return
+                                elif msg_type == "error":
+                                    yield f"data: {json.dumps({'error': content, 'done': True})}\n\n"
+                                    return
+                            except queue.Empty:
+                                break
+                        break
 
         return StreamingResponse(
             generate(),
@@ -255,6 +275,7 @@ def create_app(agent: ContextMedAgent) -> FastAPI:
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
                 "X-Accel-Buffering": "no",
+                "Content-Type": "text/event-stream",
             },
         )
 

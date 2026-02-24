@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>ContextMed: Globally Informed, Locally Accurate Clinical AI</title>
+    <style>
+        body {
+            font-family: 'Calibri', 'Arial', sans-serif;
+            font-size: 11pt;
+            line-height: 1.5;
+            max-width: 8.5in;
+            margin: 0.75in auto;
+            color: #333;
+        }
+        h1 {
+            font-size: 18pt;
+            color: #1a365d;
+            border-bottom: 2px solid #2563eb;
+            padding-bottom: 8px;
+            margin-top: 0;
+        }
+        h2 {
+            font-size: 14pt;
+            color: #1e40af;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        h3 {
+            font-size: 12pt;
+            color: #374151;
+            margin-top: 16px;
+            margin-bottom: 8px;
+        }
+        p {
+            margin: 8px 0;
+            text-align: justify;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 12px 0;
+            font-size: 10pt;
+        }
+        th, td {
+            border: 1px solid #d1d5db;
+            padding: 6px 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f3f4f6;
+            font-weight: bold;
+        }
+        code {
+            background-color: #f3f4f6;
+            padding: 2px 4px;
+            font-family: 'Consolas', monospace;
+            font-size: 10pt;
+        }
+        pre {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 12px;
+            font-family: 'Consolas', monospace;
+            font-size: 9pt;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        ul, ol {
+            margin: 8px 0;
+            padding-left: 24px;
+        }
+        li {
+            margin: 4px 0;
+        }
+        .team-info {
+            background-color: #eff6ff;
+            padding: 12px;
+            border-radius: 4px;
+            margin: 12px 0;
+        }
+        .highlight {
+            background-color: #fef3c7;
+            padding: 8px 12px;
+            border-left: 4px solid #f59e0b;
+            margin: 12px 0;
+        }
+        .architecture-box {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 16px;
+            font-family: 'Consolas', monospace;
+            font-size: 9pt;
+            margin: 16px 0;
+        }
+    </style>
+</head>
+<body>
+
+<h1>ContextMed: Globally Informed, Locally Accurate Clinical AI</h1>
+
+<div class="team-info">
+    <strong>Project Name:</strong> ContextMed — Geography Aware, Experience Adaptive Clinical Decision Support<br>
+    <strong>Team:</strong> Sandhanakrishnan Ravichandran, M.Sc TUM, AI Engineer
+</div>
+
+<h2>Problem Statement</h2>
+
+<h3>The Geography Problem in Medical AI</h3>
+
+<p>Large Language Models trained on predominantly Western medical literature exhibit significant geographic bias. A physician in Mumbai asking about emergency protocols might receive "Call 911" instead of the correct Indian emergency number (112). More critically, drug approvals, treatment guidelines, and clinical protocols vary substantially across regulatory bodies:</p>
+
+<table>
+    <tr>
+        <th>Region</th>
+        <th>Regulatory Body</th>
+        <th>Guideline Organizations</th>
+    </tr>
+    <tr>
+        <td>USA</td>
+        <td>FDA</td>
+        <td>ACC, AHA, CDC</td>
+    </tr>
+    <tr>
+        <td>Germany</td>
+        <td>BfArM, EMA</td>
+        <td>AWMF, DGK</td>
+    </tr>
+    <tr>
+        <td>UK</td>
+        <td>MHRA</td>
+        <td>NICE, BNF</td>
+    </tr>
+    <tr>
+        <td>India</td>
+        <td>CDSCO</td>
+        <td>ICMR, API</td>
+    </tr>
+</table>
+
+<p>A generic LLM recommending a medication approved by the FDA but not by the EMA creates real clinical risk. Similarly, dosing recommendations, contraindications, and first line therapies differ between ACC/AHA guidelines (USA) and ESC guidelines (Europe) for the same condition.</p>
+
+<h3>The Temporal Problem</h3>
+
+<p>Medical knowledge evolves rapidly. Guidelines updated in 2024 may contradict recommendations from 2022. LLMs with static training data cannot reflect:</p>
+<ul>
+    <li>Updated drug safety warnings (e.g., new black box warnings)</li>
+    <li>Revised clinical thresholds (e.g., updated blood pressure targets)</li>
+    <li>Withdrawn medications or changed indications</li>
+    <li>New evidence from recent clinical trials</li>
+</ul>
+
+<p>A model trained on data from 2023 providing heart failure guidance in 2025 may miss critical updates to SGLT2 inhibitor recommendations or updated ejection fraction classifications.</p>
+
+<h3>The Experience Gap</h3>
+
+<p>A third year medical student requires fundamentally different guidance than a senior attending physician:</p>
+<ul>
+    <li><strong>Student:</strong> Needs pathophysiology explanations, step by step reasoning, common pitfalls</li>
+    <li><strong>Resident:</strong> Needs decision frameworks, escalation criteria, evidence synthesis</li>
+    <li><strong>Attending:</strong> Needs concise action items, critical findings, disposition guidance</li>
+    <li><strong>Senior Physician:</strong> Needs only novel information, significant safety alerts, practice changing evidence</li>
+</ul>
+
+<p>Generic medical AI treats all physicians identically, creating either information overload for experienced clinicians or insufficient depth for learners.</p>
+
+<h3>Impact Potential</h3>
+
+<p>Clinical decision support errors directly impact patient safety. Geographic medication errors, outdated guideline recommendations, and inappropriate response complexity represent preventable harm vectors. ContextMed addresses these gaps by:</p>
+<ol>
+    <li><strong>Reducing geographic prescribing errors</strong> through region specific guideline retrieval</li>
+    <li><strong>Ensuring current evidence</strong> via real time literature and guideline search</li>
+    <li><strong>Improving clinical workflow efficiency</strong> through experience appropriate response formatting</li>
+    <li><strong>Enhancing patient safety</strong> with automated allergy cross reactivity checking</li>
+</ol>
+
+<h2>Overall Solution: MedGemma Powered Agentic RAG</h2>
+
+<h3>Architecture Overview</h3>
+
+<p>ContextMed implements an agentic Retrieval Augmented Generation (RAG) system using MedGemma as the reasoning core. Rather than relying on MedGemma's parametric knowledge alone, the system augments responses with real time evidence retrieval.</p>
+
+<div class="architecture-box">
+<pre>
+┌─────────────────────────────────────────────────────────────┐
+│           Next.js Frontend (SSE Streaming)                  │
+├─────────────────────────────────────────────────────────────┤
+│              FastAPI Server (Real time SSE)                 │
+├─────────────────────────────────────────────────────────────┤
+│              ContextMedAgent Orchestrator                   │
+├─────────────────────────────────────────────────────────────┤
+│     LangGraph ReAct Workflow (Think → Act → Observe)        │
+│     ┌─────────┐    ┌─────────┐    ┌──────────────┐         │
+│     │  Agent  │───▶│  Tools  │───▶│ Final Answer │         │
+│     └────┬────┘    └────┬────┘    └──────────────┘         │
+│          │              │                                   │
+│          └──────────────┘ (loops until ready)              │
+├─────────────────────────────────────────────────────────────┤
+│  Tool Layer                                                 │
+│  ┌──────────┐ ┌──────────┐ ┌────────────┐ ┌─────────────┐  │
+│  │ PubMed   │ │ OpenFDA  │ │ Guidelines │ │ Safety      │  │
+│  │ Search   │ │ Drug     │ │ (Tavily)   │ │ (Allergy/   │  │
+│  │          │ │ Labels   │ │            │ │  Dose)      │  │
+│  └──────────┘ └──────────┘ └────────────┘ └─────────────┘  │
+├─────────────────────────────────────────────────────────────┤
+│        MedGemma 4B (4 bit quantized, local GPU)            │
+└─────────────────────────────────────────────────────────────┘
+</pre>
+</div>
+
+<h3>Why MedGemma + RAG Instead of MedGemma Alone</h3>
+
+<p>MedGemma excels at medical reasoning but faces inherent limitations:</p>
+<ol>
+    <li><strong>Training Data Cutoff:</strong> Cannot access post training publications or guideline updates</li>
+    <li><strong>Geographic Neutrality:</strong> Trained on mixed corpora without explicit regional weighting</li>
+    <li><strong>Hallucination Risk:</strong> May generate plausible but incorrect drug dosages or interactions</li>
+</ol>
+
+<p>By positioning MedGemma as the reasoning agent that decides which external tools to invoke, we leverage its medical comprehension while grounding responses in verifiable, current evidence.</p>
+
+<h3>ReAct Workflow Implementation</h3>
+
+<p>The system implements Reasoning and Acting (ReAct) through LangGraph:</p>
+
+<p><strong>Agent Node:</strong> MedGemma analyzes the query and physician/patient context, then outputs a structured tool selection:</p>
+<pre>{"tool": "search_guidelines", "params": {"query": "heart failure diuretic dosing"}}</pre>
+
+<p><strong>Tools Node:</strong> Executes the selected tool asynchronously:</p>
+<ul>
+    <li><code>search_pubmed</code>: NCBI E Utilities API for recent literature</li>
+    <li><code>search_openfda</code>: FDA drug label database for safety information</li>
+    <li><code>search_guidelines</code>: Tavily search with geography filtered domains</li>
+    <li><code>check_allergies</code>: Cross reactivity analysis against patient allergies</li>
+    <li><code>calculate_dose</code>: Renal and weight based dose adjustment</li>
+</ul>
+
+<p><strong>Final Answer Node:</strong> Synthesizes retrieved evidence with patient context, generating a response calibrated to the physician's experience level.</p>
+
+<h3>Geography Aware Guideline Retrieval</h3>
+
+<p>The core differentiator is geography filtered evidence retrieval. When a German physician queries treatment guidelines, the system:</p>
+<ol>
+    <li>Detects <code>doctor.country = "Germany"</code></li>
+    <li>Configures Tavily search with German specific domains: awmf.org, escardio.org, dgk.org, aerzteblatt.de, ema.europa.eu</li>
+    <li>Appends query context: "AWMF Leitlinie deutsche guidelines Germany EMA"</li>
+    <li>Returns ESC/AWMF guidelines instead of ACC/AHA guidelines</li>
+</ol>
+
+<p>The same query from a USA physician returns FDA/ACC/AHA sources.</p>
+
+<table>
+    <tr>
+        <th>Region</th>
+        <th>Domains</th>
+    </tr>
+    <tr>
+        <td>USA</td>
+        <td>acc.org, heart.org, fda.gov, cdc.gov, nih.gov, uptodate.com</td>
+    </tr>
+    <tr>
+        <td>Germany</td>
+        <td>awmf.org, escardio.org, dgk.org, aerzteblatt.de, ema.europa.eu</td>
+    </tr>
+    <tr>
+        <td>UK</td>
+        <td>nice.org.uk, bnf.nice.org.uk, gov.uk</td>
+    </tr>
+    <tr>
+        <td>EU</td>
+        <td>escardio.org, ema.europa.eu, easl.eu</td>
+    </tr>
+    <tr>
+        <td>India</td>
+        <td>icmr.nic.in, cdsco.gov.in, apiindia.org</td>
+    </tr>
+</table>
+
+<h3>Experience Adaptive Response Generation</h3>
+
+<p>System prompts adapt based on <code>doctor.experience_level</code>:</p>
+
+<p><strong>Student Mode:</strong> Provide detailed explanations with pathophysiology, mechanisms, step by step clinical reasoning, key learning points, and common mistakes to avoid.</p>
+
+<p><strong>Attending Mode:</strong> Be concise and action oriented, focused on critical findings and immediate next steps, specific with recommendations, including relevant evidence when it changes management.</p>
+
+<p>This ensures a senior emergency physician receives a three sentence disposition recommendation, while a medical student receives comprehensive educational context.</p>
+
+<h2>Technical Details</h2>
+
+<h3>Model Configuration</h3>
+
+<p><strong>Base Model:</strong> <code>google/medgemma-4b-it</code> (4 billion parameter instruction tuned variant)</p>
+
+<p><strong>Quantization:</strong> 4 bit NormalFloat (NF4) via BitsAndBytes reduces VRAM from approximately 16GB to approximately 4GB, enabling inference on consumer GPUs (T4, RTX 3080) with minimal quality degradation for clinical reasoning tasks.</p>
+
+<h3>Patient Context Integration</h3>
+
+<p>The system ingests structured EHR data including demographics, chief complaint, allergies, current medications with dosages, recent laboratory values with flags, and imaging results. This context is injected into MedGemma's prompt, enabling patient specific recommendations that account for renal function, current medications, and documented allergies.</p>
+
+<h3>Allergy Safety System</h3>
+
+<p>Before any medication recommendation, the system checks for direct matches and cross reactivity families:</p>
+<ul>
+    <li>Penicillin family: amoxicillin, ampicillin, piperacillin</li>
+    <li>Sulfa family: sulfamethoxazole, TMP SMX</li>
+    <li>Cephalosporin family: cephalexin, ceftriaxone, cefazolin</li>
+    <li>NSAID family: ibuprofen, naproxen, ketorolac</li>
+</ul>
+
+<h3>Real Time Streaming</h3>
+
+<p>The FastAPI backend implements Server Sent Events (SSE) for token by token streaming. Query arrives at the endpoint, background thread executes the LangGraph workflow, ContextVar callback captures each generated token, tokens are pushed to async queue and yielded as SSE events, and the frontend displays progressive response generation. This provides immediate feedback during the 10 to 30 second generation time.</p>
+
+<h3>Deployment</h3>
+
+<p><strong>Kaggle Notebook:</strong> Self contained execution with T4 GPU and Ngrok tunneling for external access.</p>
+<p><strong>Local Development:</strong> Requires CUDA compatible GPU with 8GB or more VRAM.</p>
+
+<h3>Limitations and Future Work</h3>
+
+<ol>
+    <li><strong>Language Support:</strong> Currently optimized for English and German; expansion to additional languages planned</li>
+    <li><strong>Guideline Coverage:</strong> Five regions supported; additional regulatory bodies (Japan PMDA, Australia TGA) in development</li>
+    <li><strong>Validation:</strong> Clinical validation studies needed before deployment in actual patient care settings</li>
+</ol>
+
+<h2>References</h2>
+
+<ol>
+    <li>Singhal K, et al. "Large language models encode clinical knowledge." Nature 2023.</li>
+    <li>Google Health AI. "MedGemma: Open Medical Foundation Models." 2025.</li>
+    <li>ACC/AHA. "2022 Heart Failure Guidelines." Circulation 2022.</li>
+    <li>AWMF. "Nationale VersorgungsLeitlinie Chronische Herzinsuffizienz." 2023.</li>
+    <li>ESC. "2023 Focused Update on Heart Failure Guidelines." European Heart Journal 2023.</li>
+    <li>Yao S, et al. "ReAct: Synergizing Reasoning and Acting in Language Models." ICLR 2023.</li>
+</ol>
+
+<h2>Links</h2>
+
+<ul>
+    <li><strong>Video Demo:</strong> [3 minute demonstration]</li>
+    <li><strong>Source Code:</strong> https://github.com/sandybme/contextmed</li>
+    <li><strong>Live Demo:</strong> [If deployed]</li>
+</ul>
+
+<p style="text-align: center; margin-top: 24px; color: #6b7280; font-style: italic;">Built for the MedGemma Impact Challenge 2025</p>
+
+</body>
+</html>
