@@ -1,72 +1,80 @@
 # ContextMed: Globally Informed, Locally Accurate Clinical AI
 
 ## Project Name
-**ContextMed** — Geography Aware, Experience Adaptive Clinical Decision Support
+
+**ContextMed** — Context Aware Agentic Clinical Decision Support
 
 ## Team
+
 Sandhanakrishnan Ravichandran, M.Sc TUM, AI Engineer
 
 ---
 
 ## Problem Statement
 
-### The Geography Problem in Medical AI
+### The Context Problem in Medical AI
 
-Large Language Models trained on predominantly Western medical literature exhibit significant geographic bias. A physician in Mumbai asking about emergency protocols might receive "Call 911" instead of the correct Indian emergency number (112). More critically, drug approvals, treatment guidelines, and clinical protocols vary substantially across regulatory bodies:
+Generic Large Language Models lack awareness of the three critical contexts that define clinical practice:
 
-| Region | Regulatory Body | Guideline Organizations |
-|--------|-----------------|------------------------|
-| USA | FDA | ACC, AHA, CDC |
-| Germany | BfArM, EMA | AWMF, DGK |
-| UK | MHRA | NICE, BNF |
-| India | CDSCO | ICMR, API |
+**1. Geographic Context**: A physician in Mumbai asking about emergency protocols receives "Call 911" instead of the correct Indian emergency number (112). Drug approvals differ between FDA (USA), EMA (Europe), and CDSCO (India). Treatment guidelines from ACC/AHA (USA) may contradict ESC (Europe) or AWMF (Germany) recommendations for the same condition. A medication approved in the United States may be unavailable or contraindicated in Germany.
 
-A generic LLM recommending a medication approved by the FDA but not by the EMA creates real clinical risk. Similarly, dosing recommendations, contraindications, and first line therapies differ between ACC/AHA guidelines (USA) and ESC guidelines (Europe) for the same condition.
+**2. Temporal Context**: Medical knowledge evolves continuously. Guidelines updated in 2024 may contradict recommendations from 2022. LLMs with static training data provide outdated information on:
 
-### The Temporal Problem
-
-Medical knowledge evolves rapidly. Guidelines updated in 2024 may contradict recommendations from 2022. LLMs with static training data cannot reflect:
-- Updated drug safety warnings (e.g., new black box warnings)
-- Revised clinical thresholds (e.g., updated blood pressure targets)
+- Drug safety warnings (new black box warnings added post training)
+- Revised clinical thresholds (updated blood pressure targets)
 - Withdrawn medications or changed indications
 - New evidence from recent clinical trials
 
-A model trained on data from 2023 providing heart failure guidance in 2025 may miss critical updates to SGLT2 inhibitor recommendations or updated ejection fraction classifications.
+**3. Clinical Context**: The same query requires fundamentally different responses based on:
 
-### The Experience Gap
+- **Physician Experience**: A medical student needs pathophysiology explanations; an attending needs concise action items
+- **Patient Factors**: Allergies, current medications, renal function, and lab values change recommendations
+- **Clinical Urgency**: Routine consultations versus emergency situations require different response structures
 
-A third year medical student requires fundamentally different guidance than a senior attending physician:
-- **Student**: Needs pathophysiology explanations, step by step reasoning, common pitfalls
-- **Resident**: Needs decision frameworks, escalation criteria, evidence synthesis
-- **Attending**: Needs concise action items, critical findings, disposition guidance
-- **Senior Physician**: Needs only novel information, significant safety alerts, practice changing evidence
 
-Generic medical AI treats all physicians identically, creating either information overload for experienced clinicians or insufficient depth for learners.
+| Region  | Regulatory Body | Guideline Organizations | Emergency Number |
+| ------- | --------------- | ----------------------- | ---------------- |
+| USA     | FDA             | ACC, AHA, CDC           | 911              |
+| Germany | BfArM, EMA      | AWMF, DGK               | 112              |
+| UK      | MHRA            | NICE, BNF               | 999              |
+| India   | CDSCO           | ICMR, API               | 112              |
+
+
+### Why Context Matters
+
+A generic LLM recommending a medication approved by the FDA but not by the EMA creates real clinical risk. Similarly:
+
+- Dosing recommendations differ between American and European guidelines
+- First line therapies vary by regulatory jurisdiction
+- Drug interactions depend on regionally available formulations
+- Clinical workflows differ between healthcare systems
 
 ### Impact Potential
 
-Clinical decision support errors directly impact patient safety. Geographic medication errors, outdated guideline recommendations, and inappropriate response complexity represent preventable harm vectors. ContextMed addresses these gaps by:
+Clinical decision support errors directly impact patient safety. ContextMed addresses these gaps by:
 
 1. **Reducing geographic prescribing errors** through region specific guideline retrieval
 2. **Ensuring current evidence** via real time literature and guideline search
 3. **Improving clinical workflow efficiency** through experience appropriate response formatting
 4. **Enhancing patient safety** with automated allergy cross reactivity checking
+5. **Supporting emergency care** with dedicated critical care mode
 
 ---
 
-## Overall Solution: MedGemma Powered Agentic RAG
+## Overall Solution: Context Aware Agentic RAG
 
 ### Architecture Overview
 
-ContextMed implements an agentic Retrieval Augmented Generation (RAG) system using MedGemma as the reasoning core. Rather than relying on MedGemma's parametric knowledge alone, the system augments responses with real time evidence retrieval.
+ContextMed implements a context aware agentic Retrieval Augmented Generation (RAG) system using MedGemma as the reasoning core. The system maintains awareness of three context layers throughout the clinical reasoning process.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│           Next.js Frontend (SSE Streaming)                  │
-├─────────────────────────────────────────────────────────────┤
-│              FastAPI Server (Real time SSE)                 │
-├─────────────────────────────────────────────────────────────┤
-│              ContextMedAgent Orchestrator                   │
+│                    CONTEXT LAYER                            │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐        │
+│  │  Geographic  │ │  Physician   │ │   Patient    │        │
+│  │  (Country,   │ │  (Experience,│ │  (Allergies, │        │
+│  │   Language)  │ │   Specialty) │ │   Labs, Meds)│        │
+│  └──────────────┘ └──────────────┘ └──────────────┘        │
 ├─────────────────────────────────────────────────────────────┤
 │     LangGraph ReAct Workflow (Think → Act → Observe)        │
 │     ┌─────────┐    ┌─────────┐    ┌──────────────┐         │
@@ -75,103 +83,153 @@ ContextMed implements an agentic Retrieval Augmented Generation (RAG) system usi
 │          │              │                                   │
 │          └──────────────┘ (loops until ready)              │
 ├─────────────────────────────────────────────────────────────┤
-│  Tool Layer                                                 │
+│  Context Aware Tool Layer                                   │
 │  ┌──────────┐ ┌──────────┐ ┌────────────┐ ┌─────────────┐  │
 │  │ PubMed   │ │ OpenFDA  │ │ Guidelines │ │ Safety      │  │
-│  │ Search   │ │ Drug     │ │ (Tavily)   │ │ (Allergy/   │  │
-│  │          │ │ Labels   │ │            │ │  Dose)      │  │
+│  │ Search   │ │ Drug     │ │ (Geography │ │ (Allergy/   │  │
+│  │          │ │ Labels   │ │  Filtered) │ │  Dose)      │  │
 │  └──────────┘ └──────────┘ └────────────┘ └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
 │        MedGemma 4B (4 bit quantized, local GPU)            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Why MedGemma + RAG Instead of MedGemma Alone
+### Why MedGemma + Context Aware RAG
 
-MedGemma excels at medical reasoning but faces inherent limitations:
+MedGemma excels at medical reasoning but faces inherent limitations that context aware RAG addresses:
 
-1. **Training Data Cutoff**: Cannot access post training publications or guideline updates
-2. **Geographic Neutrality**: Trained on mixed corpora without explicit regional weighting
-3. **Hallucination Risk**: May generate plausible but incorrect drug dosages or interactions
 
-By positioning MedGemma as the reasoning agent that decides which external tools to invoke, we leverage its medical comprehension while grounding responses in verifiable, current evidence.
+| Limitation              | How Context Aware RAG Solves It              |
+| ----------------------- | -------------------------------------------- |
+| Training data cutoff    | Real time guideline and literature retrieval |
+| Geographic neutrality   | Country specific domain filtering            |
+| Static knowledge        | Dynamic evidence grounding                   |
+| Generic responses       | Experience level adaptation                  |
+| Missing patient context | EHR integration with safety checks           |
 
-### ReAct Workflow Implementation
 
-The system implements Reasoning and Acting (ReAct) through LangGraph:
+### The Three Context Dimensions
 
-**Agent Node**: MedGemma analyzes the query and physician/patient context, then outputs a structured tool selection:
-```json
-{"tool": "search_guidelines", "params": {"query": "heart failure diuretic dosing"}}
-```
+**1. Geographic Context Implementation**
 
-**Tools Node**: Executes the selected tool asynchronously:
-- `search_pubmed`: NCBI E Utilities API for recent literature
-- `search_openfda`: FDA drug label database for safety information
-- `search_guidelines`: Tavily search with geography filtered domains
-- `check_allergies`: Cross reactivity analysis against patient allergies
-- `calculate_dose`: Renal and weight based dose adjustment
+When a German physician queries treatment guidelines:
 
-**Final Answer Node**: Synthesizes retrieved evidence with patient context, generating a response calibrated to the physician's experience level.
+- System detects `doctor.country = "Germany"`
+- Configures Tavily search with German specific domains: `awmf.org`, `escardio.org`, `dgk.org`, `aerzteblatt.de`, `ema.europa.eu`
+- Appends query context: "AWMF Leitlinie deutsche guidelines Germany EMA"
+- Returns ESC/AWMF guidelines instead of ACC/AHA guidelines
 
-### Geography Aware Guideline Retrieval
+The same query from a USA physician automatically retrieves FDA/ACC/AHA sources.
 
-The core differentiator is geography filtered evidence retrieval. When a German physician queries treatment guidelines, the system:
 
-1. Detects `doctor.country = "Germany"`
-2. Configures Tavily search with German specific domains:
-   - `awmf.org` (German guideline clearinghouse)
-   - `escardio.org` (European Society of Cardiology)
-   - `dgk.org` (German Cardiac Society)
-   - `aerzteblatt.de` (German Medical Journal)
-   - `ema.europa.eu` (European Medicines Agency)
-3. Appends query context: "AWMF Leitlinie deutsche guidelines Germany EMA"
-4. Returns ESC/AWMF guidelines instead of ACC/AHA guidelines
+| Country | Guideline Domains                                              |
+| ------- | -------------------------------------------------------------- |
+| USA     | acc.org, heart.org, fda.gov, cdc.gov, nih.gov, uptodate.com    |
+| Germany | awmf.org, escardio.org, dgk.org, aerzteblatt.de, ema.europa.eu |
+| UK      | nice.org.uk, bnf.nice.org.uk, gov.uk                           |
+| EU      | escardio.org, ema.europa.eu, easl.eu                           |
+| India   | icmr.nic.in, cdsco.gov.in, apiindia.org                        |
 
-The same query from a USA physician returns FDA/ACC/AHA sources.
 
-**Supported Regions**:
-- USA: FDA, ACC, AHA, CDC, NIH, UpToDate
-- Germany: AWMF, EMA, DGK, Aerzteblatt
-- UK: NICE, BNF, NHS
-- EU: ESC, EMA, EASL
-- India: ICMR, CDSCO, API
-
-### Experience Adaptive Response Generation
+**2. Physician Context Implementation**
 
 System prompts adapt based on `doctor.experience_level`:
 
-**Student Mode**:
-```
-Provide detailed explanations with:
-- Pathophysiology and mechanisms
-- Step by step clinical reasoning
-- Key learning points and pearls
-- Common mistakes to avoid
-```
 
-**Attending Mode**:
-```
-Be:
-- Concise and action oriented
-- Focused on critical findings and immediate next steps
-- Specific with recommendations
-- Including relevant evidence when it changes management
-```
+| Experience Level | Response Style                                                                     |
+| ---------------- | ---------------------------------------------------------------------------------- |
+| Student          | Detailed pathophysiology, step by step reasoning, learning points, common pitfalls |
+| Resident         | Decision frameworks, escalation criteria, evidence synthesis                       |
+| Attending        | Concise action items, critical findings, disposition guidance                      |
+| Senior           | Only novel information, significant safety alerts, practice changing evidence      |
 
-This ensures a senior emergency physician receives a three sentence disposition recommendation, while a medical student receives comprehensive educational context.
 
-### Critical Care Mode
+**3. Patient Context Implementation**
 
-For emergency situations, the system activates critical care mode:
+The system ingests structured EHR data including demographics, chief complaint, allergies, current medications, and laboratory values. This enables:
 
-1. Adds emergency medicine domains: `sccm.org`, `esicm.org`, `ccforum.biomedcentral.com`
-2. Forces structured response format:
-   - **Assessment**: Primary diagnosis with key finding
-   - **Immediate Action**: Specific intervention with dose
-   - **Monitor**: Parameter, target value, frequency
-   - **Safety Alert**: Patient specific consideration
-3. Prioritizes speed and actionability over comprehensiveness
+- Allergy cross reactivity checking before any medication recommendation
+- Renal dose adjustment based on eGFR
+- Drug interaction analysis against current medications
+- Personalized recommendations considering comorbidities
+
+---
+
+## Regular Mode vs Critical Mode
+
+ContextMed operates in two distinct modes optimized for different clinical scenarios:
+
+### Regular Mode
+
+Designed for routine clinical consultations, outpatient encounters, and non urgent decision support.
+
+**Characteristics**:
+
+- Comprehensive evidence gathering from PubMed, guidelines, and drug databases
+- Detailed explanations appropriate to physician experience level
+- Full citation of sources with numbered references
+- Educational context for learners
+- Thorough consideration of alternatives and contraindications
+
+**Response Structure**:
+
+- Clinical reasoning with supporting evidence
+- Specific recommendations with dosing
+- Relevant citations and references
+- Safety considerations
+
+**Example Use Cases**:
+
+- Outpatient medication adjustment
+- Chronic disease management planning
+- Differential diagnosis workup
+- Treatment guideline clarification
+
+### Critical Mode
+
+Designed for emergency situations, ICU consultations, and time sensitive clinical decisions.
+
+**Characteristics**:
+
+- Rapid, actionable responses prioritizing speed
+- Structured four point format for quick scanning
+- Additional critical care guideline sources (SCCM, ESICM)
+- Enhanced search with emergency medicine context
+- Immediate safety alerts prominently displayed
+
+**Response Structure**:
+
+1. **Assessment**: Primary diagnosis with key supporting finding
+2. **Immediate Action**: Specific intervention with exact dose or procedure
+3. **Monitor**: Parameter to watch, target value, monitoring frequency
+4. **Safety Alert**: Critical consideration based on patient specific factors
+
+**Additional Critical Care Domains**:
+
+- sccm.org (Society of Critical Care Medicine)
+- esicm.org (European Society of Intensive Care Medicine)
+- ccforum.biomedcentral.com (Critical Care Forum)
+- pmc.ncbi.nlm.nih.gov (PubMed Central for research)
+
+**Example Use Cases**:
+
+- Hemodynamic instability management
+- Acute respiratory failure
+- Sepsis protocol initiation
+- Cardiac arrest post resuscitation care
+
+### Mode Comparison
+
+
+| Aspect                 | Regular Mode              | Critical Mode            |
+| ---------------------- | ------------------------- | ------------------------ |
+| Response time priority | Thoroughness              | Speed                    |
+| Evidence depth         | Comprehensive             | Focused                  |
+| Response format        | Flexible narrative        | Structured 4 point       |
+| Guideline sources      | Regional specialty        | Regional + Critical Care |
+| Educational content    | Based on experience level | Minimal, action focused  |
+| Safety alerts          | Integrated                | Prominently displayed    |
+
 
 ---
 
@@ -181,96 +239,39 @@ For emergency situations, the system activates critical care mode:
 
 **Base Model**: `google/medgemma-4b-it` (4 billion parameter instruction tuned variant)
 
-**Quantization**: 4 bit NormalFloat (NF4) via BitsAndBytes
-- Reduces VRAM from ~16GB to ~4GB
-- Enables inference on consumer GPUs (T4, RTX 3080)
-- Minimal quality degradation for clinical reasoning tasks
-
-**Inference Configuration**:
-```python
-BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.bfloat16,
-    bnb_4bit_use_double_quant=True
-)
-```
-
-### Patient Context Integration
-
-The system ingests structured EHR data:
-
-```python
-PatientEHR(
-    name="Robert Johnson",
-    age=67,
-    sex="M",
-    chief_complaint="Increasing SOB and leg swelling",
-    allergies=["Penicillin (rash)", "Sulfa (anaphylaxis)"],
-    current_medications=[
-        Medication(name="Metformin", dose="1000mg BID"),
-        Medication(name="Lisinopril", dose="20mg daily")
-    ],
-    recent_labs={
-        "Creatinine": LabValue(value=1.4, unit="mg/dL", flag="H"),
-        "eGFR": LabValue(value=52, unit="mL/min", flag="L"),
-        "NT-proBNP": LabValue(value=450, unit="pg/mL", flag="H")
-    }
-)
-```
-
-This context is injected into MedGemma's prompt, enabling patient specific recommendations that account for renal function, current medications, and documented allergies.
+**Quantization**: 4 bit NormalFloat (NF4) via BitsAndBytes reduces VRAM from approximately 16GB to approximately 4GB, enabling inference on consumer GPUs (T4, RTX 3080) with minimal quality degradation.
 
 ### Allergy Safety System
 
-Before any medication recommendation, the system checks for:
+Before any medication recommendation, the system checks for direct matches and cross reactivity families:
 
-1. **Direct Matches**: "Penicillin" allergy blocks penicillin recommendation
-2. **Cross Reactivity Families**:
-   - Penicillin → amoxicillin, ampicillin, piperacillin
-   - Sulfa → sulfamethoxazole, TMP SMX
-   - Cephalosporin → cephalexin, ceftriaxone, cefazolin
-   - NSAID → ibuprofen, naproxen, ketorolac
-
-Conflicts generate prominent warnings in the response.
+- Penicillin family: amoxicillin, ampicillin, piperacillin, nafcillin
+- Sulfa family: sulfamethoxazole, sulfasalazine, TMP SMX
+- Cephalosporin family: cephalexin, ceftriaxone, cefazolin, cefepime
+- NSAID family: ibuprofen, naproxen, ketorolac, diclofenac
 
 ### Real Time Streaming
 
-The FastAPI backend implements Server Sent Events (SSE) for token by token streaming:
-
-1. Query arrives at `/ask/stream` endpoint
-2. Background thread executes LangGraph workflow
-3. ContextVar callback captures each generated token
-4. Tokens pushed to async queue, yielded as SSE events
-5. Frontend displays progressive response generation
-
-This provides immediate feedback during the 10 to 30 second generation time.
+The FastAPI backend implements Server Sent Events (SSE) for token by token streaming, providing immediate feedback during the 10 to 30 second generation time.
 
 ### API Endpoints
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/doctors` | GET | List available physician personas |
-| `/patients` | GET | List available patient cases |
-| `/patient/{id}` | GET | Full patient EHR details |
-| `/ask/stream` | POST | Streaming clinical query |
-| `/doctors/create` | POST | Create custom physician |
-| `/patients/create/ehr` | POST | Parse unstructured clinical notes |
 
-### Deployment Considerations
+| Endpoint               | Method | Purpose                                           |
+| ---------------------- | ------ | ------------------------------------------------- |
+| `/doctors`             | GET    | List available physician personas                 |
+| `/patients`            | GET    | List available patient cases                      |
+| `/patient/{id}`        | GET    | Full patient EHR details                          |
+| `/ask/stream`          | POST   | Streaming clinical query (mode: regular/critical) |
+| `/doctors/create`      | POST   | Create custom physician                           |
+| `/patients/create/ehr` | POST   | Parse unstructured clinical notes                 |
 
-**Kaggle Notebook**: Self contained execution with T4 GPU, Ngrok tunneling for external access
-
-**Local Development**: Requires CUDA compatible GPU with 8GB+ VRAM
-
-**Production**: Containerized deployment with GPU passthrough recommended
 
 ### Limitations and Future Work
 
 1. **Language Support**: Currently optimized for English and German; expansion to additional languages planned
 2. **Guideline Coverage**: Five regions supported; additional regulatory bodies (Japan PMDA, Australia TGA) in development
-3. **Real Time Updates**: Guideline search reflects web indexed content; direct API integration with guideline publishers would improve currency
-4. **Validation**: Clinical validation studies needed before deployment in actual patient care settings
+3. **Validation**: Clinical validation studies needed before deployment in actual patient care settings
 
 ---
 
@@ -288,8 +289,7 @@ This provides immediate feedback during the 10 to 30 second generation time.
 ## Links
 
 - **Video Demo**: [3 minute demonstration]
-- **Source Code**: https://github.com/sandybme/contextmed 
-
+- **Source Code**: [https://github.com/sandybme/contextmed](https://github.com/sandybme/contextmed)
 
 ---
 
